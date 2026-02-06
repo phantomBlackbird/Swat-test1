@@ -2,34 +2,22 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Subrural - Advanced Controls</title>
+    <title>Subrural - Physics & Exploration</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
     
     <style>
       .controller {
-        position: absolute;
-        bottom: 40px;
-        width: 160px;
-        height: 160px;
-        z-index: 100;
-        display: grid;
-        grid-template-areas: ". up ." "left . right" ". down .";
-        gap: 10px;
+        position: absolute; bottom: 40px; width: 160px; height: 160px; z-index: 100;
+        display: grid; gap: 10px;
       }
-      #move-pad { left: 40px; }
-      #action-pad { 
-        right: 40px; 
-        grid-template-areas: ". jump ." "grenade . reload" ". fire .";
-      }
+      #move-pad { left: 40px; grid-template-areas: ". up ." "left . right" ". down ."; }
+      #action-pad { right: 40px; grid-template-areas: ". jump ." "grenade . reload" ". fire ."; }
       .btn {
-        width: 50px; height: 50px;
-        background: rgba(255, 255, 255, 0.4);
-        border: 2px solid #fff;
-        border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 10px; font-weight: bold; color: white;
-        user-select: none; touch-action: none;
+        width: 50px; height: 50px; background: rgba(255, 255, 255, 0.4); border: 2px solid #fff;
+        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: bold; color: white; user-select: none; touch-action: none;
       }
       .btn:active { background: rgba(255, 255, 255, 0.8); color: black; }
       #up { grid-area: up; } #left { grid-area: left; } #right { grid-area: right; } #down { grid-area: down; }
@@ -52,27 +40,28 @@
       <div class="btn" id="fire">FIRE</div>
     </div>
 
-    <a-scene>
+    <a-scene physics="debug: false; gravity: -9.8">
       <a-assets>
         <a-asset-item id="subrural" src="Subrural.glb"></a-asset-item>
         <a-asset-item id="player" src="Player.glb"></a-asset-item>
       </a-assets>
 
-      <a-entity gltf-model="#subrural"></a-entity>
-      <a-plane rotation="-90 0 0" width="200" height="200" color="#8B4513"></a-plane>
+      <a-entity gltf-model="#subrural" static-body></a-entity>
+      <a-plane rotation="-90 0 0" width="500" height="500" color="#8B4513" static-body></a-plane>
       <a-sky color="#87CEEB"></a-sky>
 
-      <a-entity id="player-rig" position="0 0 0">
+      <a-entity id="player-rig" position="0 0.1 0" kinematic-body="radius: 0.05">
+        
         <a-entity id="player-model" 
                   gltf-model="#player" 
-                  scale="0.0008 0.0008 0.0008" 
+                  scale="0.0024 0.0024 0.0024" 
                   animation-mixer="clip: idle; crossFadeDuration: 0.3"
                   rotation="0 180 0">
         </a-entity>
 
         <a-entity id="camera-orbit-y">
           <a-entity id="camera-orbit-x">
-            <a-entity camera position="0 0.25 0.8" look-controls="enabled: false"></a-entity>
+            <a-entity camera position="0 0.4 1.2" look-controls="enabled: false"></a-entity>
           </a-entity>
         </a-entity>
       </a-entity>
@@ -91,7 +80,6 @@
       let holdTimer = null;
       let isRunning = false;
 
-      // --- MOVEMENT LOGIC ---
       const startMove = (key) => {
         moveKeys[key] = true;
         if (!holdTimer) {
@@ -112,36 +100,22 @@
         el.addEventListener('touchend', () => endMove(id));
       });
 
-      // --- ACTION LOGIC ---
-      const triggerAction = (clipName) => {
-        model.setAttribute('animation-mixer', { clip: clipName, loop: 'once', clampWhenFinished: true });
-        model.addEventListener('finished', () => {
-          model.setAttribute('animation-mixer', 'clip: idle');
-        }, { once: true });
-      };
-
-      document.getElementById('jump').onclick = () => triggerAction('jump');
-      document.getElementById('fire').onclick = () => triggerAction('shoot-rifle');
-      document.getElementById('grenade').onclick = () => triggerAction('throw-grenade');
-      document.getElementById('reload').onclick = () => triggerAction('reloading');
-
-      // --- SWIPE CAMERA LOGIC ---
+      // Camera Swipe Logic
       let touchStart = { x: 0, y: 0 };
       window.addEventListener('touchstart', e => {
-        touchStart.x = e.touches[0].pageX;
-        touchStart.y = e.touches[0].pageY;
+        if(e.touches[0]) { touchStart.x = e.touches[0].pageX; touchStart.y = e.touches[0].pageY; }
       });
 
       window.addEventListener('touchmove', e => {
-        if (e.target.className.includes('btn')) return; // Don't rotate camera if clicking buttons
+        if (e.target.className.includes('btn')) return;
         let dx = e.touches[0].pageX - touchStart.x;
         let dy = e.touches[0].pageY - touchStart.y;
         
         let rotY = orbitY.getAttribute('rotation');
         let rotX = orbitX.getAttribute('rotation');
 
-        orbitY.setAttribute('rotation', `${rotY.x} ${rotY.y - dx * 0.5} ${rotY.z}`);
-        orbitX.setAttribute('rotation', `${rotX.x - dy * 0.5} ${rotX.y} ${rotX.z}`);
+        orbitY.setAttribute('rotation', `0 ${rotY.y - dx * 0.5} 0`);
+        orbitX.setAttribute('rotation', `${rotX.x - dy * 0.5} 0 0`);
 
         touchStart.x = e.touches[0].pageX;
         touchStart.y = e.touches[0].pageY;
@@ -149,7 +123,7 @@
 
       function tick() {
         let isMoving = moveKeys.up || moveKeys.down || moveKeys.left || moveKeys.right;
-        let speed = isRunning ? 0.003 : 0.0012;
+        let speed = isRunning ? 0.008 : 0.003; 
         let rot = rig.getAttribute('rotation');
         let angleRad = rot.y * (Math.PI / 180);
 
@@ -165,13 +139,12 @@
         if (moveKeys.right) rot.y -= 2;
         rig.setAttribute('rotation', rot);
 
-        // Animation update
         let currentClip = model.getAttribute('animation-mixer').clip;
-        if (isMoving && !['jump','shoot-rifle','throw-grenade','reloading'].includes(currentClip)) {
+        if (isMoving) {
             let nextClip = isRunning ? 'run-forward' : 'walk-forward';
             if (currentClip !== nextClip) model.setAttribute('animation-mixer', 'clip: ' + nextClip);
-        } else if (!isMoving && (currentClip === 'walk-forward' || currentClip === 'run-forward')) {
-            model.setAttribute('animation-mixer', 'clip: idle');
+        } else {
+            if (currentClip !== 'idle') model.setAttribute('animation-mixer', 'clip: idle');
         }
 
         requestAnimationFrame(tick);
