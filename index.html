@@ -2,22 +2,21 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Subrural - Fixed Controls</title>
+    <title>Swat Test - Active Follow Cam</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
     
     <style>
       .controller {
-        position: absolute; bottom: 40px; width: 200px; height: 200px; z-index: 1000;
+        position: absolute; bottom: 40px; width: 220px; height: 220px; z-index: 2000;
         display: grid; gap: 10px; pointer-events: auto;
       }
       #move-pad { left: 20px; grid-template-areas: ". up ." "left . right" ". down ."; }
       #action-pad { right: 20px; grid-template-areas: ". jump ." "grenade . reload" ". fire ."; }
       .btn {
-        width: 60px; height: 60px; background: rgba(255, 255, 255, 0.4); border: 2px solid #fff;
+        width: 65px; height: 65px; background: rgba(255, 255, 255, 0.4); border: 2px solid #fff;
         border-radius: 50%; display: flex; align-items: center; justify-content: center;
-        font-size: 12px; font-weight: bold; color: white; user-select: none; touch-action: none;
+        font-size: 11px; font-weight: bold; color: white; user-select: none; touch-action: none;
       }
       .btn:active { background: rgba(255, 255, 255, 0.9); color: black; }
       #up { grid-area: up; } #left { grid-area: left; } #right { grid-area: right; } #down { grid-area: down; }
@@ -32,17 +31,18 @@
       <div class="btn" id="down">BWD</div>
     </div>
 
-    <a-scene physics="debug: false; gravity: -9.8">
+    <a-scene>
       <a-assets>
         <a-asset-item id="subrural" src="Subrural.glb"></a-asset-item>
         <a-asset-item id="player" src="Player.glb"></a-asset-item>
       </a-assets>
 
-      <a-plane rotation="-90 0 0" width="1000" height="1000" color="#8B4513" static-body></a-plane>
-      <a-entity gltf-model="#subrural" static-body="shape: mesh"></a-entity>
+      <a-entity gltf-model="#subrural" position="0 0 0"></a-entity>
+      <a-plane rotation="-90 0 0" width="1000" height="1000" color="#8B4513"></a-plane>
       <a-sky color="#87CEEB"></a-sky>
 
-      <a-entity id="player-rig" position="0 0.05 0" kinematic-body="radius: 0.1">
+      <a-entity id="player-rig" position="0 0.05 0">
+        
         <a-entity id="player-model" 
                   gltf-model="#player" 
                   scale="0.0072 0.0072 0.0072" 
@@ -50,14 +50,13 @@
                   rotation="0 180 0">
         </a-entity>
 
-        <a-entity id="camera-orbit-y">
-          <a-entity id="camera-orbit-x">
-            <a-entity camera position="0 1.5 3" look-controls="enabled: false"></a-entity>
-          </a-entity>
+        <a-entity id="camera-anchor" position="0 1.5 3">
+            <a-entity camera look-controls="enabled: false"></a-entity>
         </a-entity>
       </a-entity>
 
       <a-entity light="type: ambient; intensity: 0.7"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8" position="1 10 3"></a-entity>
     </a-scene>
 
     <script>
@@ -68,15 +67,16 @@
       let isRunning = false;
       let holdTimer = null;
 
-      // Reset and bind buttons
+      // Controller Binding
       const bind = (id, key) => {
         const el = document.getElementById(id);
         const start = (e) => { 
           e.preventDefault(); 
           moveKeys[key] = true; 
-          if(!holdTimer) holdTimer = setTimeout(() => isRunning = true, 3000);
+          if(!holdTimer) holdTimer = setTimeout(() => { isRunning = true; }, 3000);
         };
-        const end = () => { 
+        const end = (e) => { 
+          e.preventDefault();
           moveKeys[key] = false; 
           isRunning = false; 
           clearTimeout(holdTimer); 
@@ -91,33 +91,38 @@
       bind('up', 'up'); bind('down', 'down'); bind('left', 'left'); bind('right', 'right');
 
       function tick() {
-        let speed = isRunning ? 0.12 : 0.04;
-        let rot = rig.getAttribute('rotation');
-        let angleRad = rot.y * (Math.PI / 180);
+        let speed = isRunning ? 0.12 : 0.05;
         let activeAnim = 'idle';
+        let rotationSpeed = 2.0;
 
-        // Movement Logic + Specific Animations
-        if (moveKeys.up) {
-          rig.object3D.position.x -= Math.sin(angleRad) * speed;
-          rig.object3D.position.z -= Math.cos(angleRad) * speed;
-          activeAnim = isRunning ? 'run-forward' : 'walk-forward';
-        } else if (moveKeys.down) {
-          rig.object3D.position.x += Math.sin(angleRad) * speed;
-          rig.object3D.position.z += Math.cos(angleRad) * speed;
-          activeAnim = isRunning ? 'run-backwards' : 'walk-backwards';
-        } else if (moveKeys.left) {
-          // Slide left relative to rotation
-          rig.object3D.position.x -= Math.cos(angleRad) * speed;
-          rig.object3D.position.z += Math.sin(angleRad) * speed;
-          activeAnim = isRunning ? 'run-left' : 'walk-left';
-        } else if (moveKeys.right) {
-          // Slide right relative to rotation
-          rig.object3D.position.x += Math.cos(angleRad) * speed;
-          rig.object3D.position.z -= Math.sin(angleRad) * speed;
-          activeAnim = isRunning ? 'run-right' : 'walk-right';
+        let currentRot = rig.getAttribute('rotation') || {x: 0, y: 0, z: 0};
+        let currentPos = rig.getAttribute('position');
+        let angleRad = currentRot.y * (Math.PI / 180);
+
+        // FWD / BWD Logic
+        if (moveKeys.up || moveKeys.down) {
+          let direction = moveKeys.up ? 1 : -1;
+          currentPos.x -= Math.sin(angleRad) * speed * direction;
+          currentPos.z -= Math.cos(angleRad) * speed * direction;
+          activeAnim = direction === 1 ? (isRunning ? 'run-forward' : 'walk-forward') : (isRunning ? 'run-backwards' : 'walk-backwards');
         }
 
-        // Apply Animation only if changed to prevent freezing
+        // LFT / RGT Logic (Strafing + Animation)
+        if (moveKeys.left) {
+          currentPos.x -= Math.cos(angleRad) * speed;
+          currentPos.z += Math.sin(angleRad) * speed;
+          if (activeAnim === 'idle') activeAnim = isRunning ? 'run-left' : 'walk-left';
+        }
+        if (moveKeys.right) {
+          currentPos.x += Math.cos(angleRad) * speed;
+          currentPos.z -= Math.sin(angleRad) * speed;
+          if (activeAnim === 'idle') activeAnim = isRunning ? 'run-right' : 'walk-right';
+        }
+
+        // Apply movement
+        rig.setAttribute('position', currentPos);
+
+        // Animation Switcher (Loop-Safe)
         if (model.getAttribute('animation-mixer').clip !== activeAnim) {
           model.setAttribute('animation-mixer', `clip: ${activeAnim}`);
         }
