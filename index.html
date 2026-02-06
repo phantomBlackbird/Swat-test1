@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Swat Test - Active Follow Cam</title>
+    <title>Subrural - Final Movement Fix</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
     
@@ -12,13 +12,12 @@
         display: grid; gap: 10px; pointer-events: auto;
       }
       #move-pad { left: 20px; grid-template-areas: ". up ." "left . right" ". down ."; }
-      #action-pad { right: 20px; grid-template-areas: ". jump ." "grenade . reload" ". fire ."; }
       .btn {
-        width: 65px; height: 65px; background: rgba(255, 255, 255, 0.4); border: 2px solid #fff;
+        width: 70px; height: 70px; background: rgba(0, 0, 0, 0.5); border: 2px solid #fff;
         border-radius: 50%; display: flex; align-items: center; justify-content: center;
-        font-size: 11px; font-weight: bold; color: white; user-select: none; touch-action: none;
+        font-size: 14px; font-weight: bold; color: white; user-select: none; touch-action: none;
       }
-      .btn:active { background: rgba(255, 255, 255, 0.9); color: black; }
+      .btn:active { background: rgba(255, 255, 255, 0.8); color: black; }
       #up { grid-area: up; } #left { grid-area: left; } #right { grid-area: right; } #down { grid-area: down; }
     </style>
   </head>
@@ -26,8 +25,8 @@
 
     <div id="move-pad" class="controller">
       <div class="btn" id="up">FWD</div>
-      <div class="btn" id="left">LFT</div>
-      <div class="btn" id="right">RGT</div>
+      <div class="btn" id="left">TURN L</div>
+      <div class="btn" id="right">TURN R</div>
       <div class="btn" id="down">BWD</div>
     </div>
 
@@ -37,7 +36,7 @@
         <a-asset-item id="player" src="Player.glb"></a-asset-item>
       </a-assets>
 
-      <a-entity gltf-model="#subrural" position="0 0 0"></a-entity>
+      <a-entity gltf-model="#subrural"></a-entity>
       <a-plane rotation="-90 0 0" width="1000" height="1000" color="#8B4513"></a-plane>
       <a-sky color="#87CEEB"></a-sky>
 
@@ -50,13 +49,13 @@
                   rotation="0 180 0">
         </a-entity>
 
-        <a-entity id="camera-anchor" position="0 1.5 3">
+        <a-entity position="0 1.8 4">
             <a-entity camera look-controls="enabled: false"></a-entity>
         </a-entity>
       </a-entity>
 
-      <a-entity light="type: ambient; intensity: 0.7"></a-entity>
-      <a-entity light="type: directional; intensity: 0.8" position="1 10 3"></a-entity>
+      <a-entity light="type: ambient; intensity: 0.8"></a-entity>
+      <a-entity light="type: directional; intensity: 0.6" position="1 10 3"></a-entity>
     </a-scene>
 
     <script>
@@ -65,22 +64,22 @@
       
       let moveKeys = { up: false, down: false, left: false, right: false };
       let isRunning = false;
-      let holdTimer = null;
+      let sprintTimer = null;
 
-      // Controller Binding
-      const bind = (id, key) => {
+      // Improved Button Binding
+      const setupButton = (id, key) => {
         const el = document.getElementById(id);
-        const start = (e) => { 
-          e.preventDefault(); 
-          moveKeys[key] = true; 
-          if(!holdTimer) holdTimer = setTimeout(() => { isRunning = true; }, 3000);
-        };
-        const end = (e) => { 
+        const start = (e) => {
           e.preventDefault();
-          moveKeys[key] = false; 
-          isRunning = false; 
-          clearTimeout(holdTimer); 
-          holdTimer = null;
+          moveKeys[key] = true;
+          if (!sprintTimer) sprintTimer = setTimeout(() => { isRunning = true; }, 3000);
+        };
+        const end = (e) => {
+          e.preventDefault();
+          moveKeys[key] = false;
+          isRunning = false;
+          clearTimeout(sprintTimer);
+          sprintTimer = null;
         };
         el.addEventListener('touchstart', start);
         el.addEventListener('touchend', end);
@@ -88,41 +87,38 @@
         el.addEventListener('mouseup', end);
       };
 
-      bind('up', 'up'); bind('down', 'down'); bind('left', 'left'); bind('right', 'right');
+      setupButton('up', 'up');
+      setupButton('down', 'down');
+      setupButton('left', 'left');
+      setupButton('right', 'right');
 
       function tick() {
+        // 1. Handle Rotation (Turn Left/Right)
+        let rotation = rig.getAttribute('rotation');
+        if (moveKeys.left) rotation.y += 2.5;
+        if (moveKeys.right) rotation.y -= 2.5;
+        rig.setAttribute('rotation', rotation);
+
+        // 2. Handle Position (Forward/Backward)
+        let position = rig.getAttribute('position');
         let speed = isRunning ? 0.12 : 0.05;
         let activeAnim = 'idle';
-        let rotationSpeed = 2.0;
 
-        let currentRot = rig.getAttribute('rotation') || {x: 0, y: 0, z: 0};
-        let currentPos = rig.getAttribute('position');
-        let angleRad = currentRot.y * (Math.PI / 180);
-
-        // FWD / BWD Logic
         if (moveKeys.up || moveKeys.down) {
           let direction = moveKeys.up ? 1 : -1;
-          currentPos.x -= Math.sin(angleRad) * speed * direction;
-          currentPos.z -= Math.cos(angleRad) * speed * direction;
+          let angleRad = rotation.y * (Math.PI / 180);
+          
+          position.x -= Math.sin(angleRad) * speed * direction;
+          position.z -= Math.cos(angleRad) * speed * direction;
+          rig.setAttribute('position', position);
+
           activeAnim = direction === 1 ? (isRunning ? 'run-forward' : 'walk-forward') : (isRunning ? 'run-backwards' : 'walk-backwards');
+        } else if (moveKeys.left || moveKeys.right) {
+            // If just turning, we play a walk animation to show movement
+            activeAnim = 'walk-forward';
         }
 
-        // LFT / RGT Logic (Strafing + Animation)
-        if (moveKeys.left) {
-          currentPos.x -= Math.cos(angleRad) * speed;
-          currentPos.z += Math.sin(angleRad) * speed;
-          if (activeAnim === 'idle') activeAnim = isRunning ? 'run-left' : 'walk-left';
-        }
-        if (moveKeys.right) {
-          currentPos.x += Math.cos(angleRad) * speed;
-          currentPos.z -= Math.sin(angleRad) * speed;
-          if (activeAnim === 'idle') activeAnim = isRunning ? 'run-right' : 'walk-right';
-        }
-
-        // Apply movement
-        rig.setAttribute('position', currentPos);
-
-        // Animation Switcher (Loop-Safe)
+        // 3. Update Animation Mixer
         if (model.getAttribute('animation-mixer').clip !== activeAnim) {
           model.setAttribute('animation-mixer', `clip: ${activeAnim}`);
         }
